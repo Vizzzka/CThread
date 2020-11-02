@@ -1,0 +1,27 @@
+name: Windows
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: windows-2019
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Conan
+        shell: bash
+        run: |
+          if grep ENABLE_CONAN CMakeLists.txt | grep -w ON &>/dev/null ; then
+            pip install conan
+            conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan
+          fi
+
+      - name: Configure
+        run: cmake -DBOOST_ROOT="$env:BOOST_ROOT_1_72_0" -DBOOST_INCLUDEDIR="$env:BOOST_ROOT_1_72_0"\boost\include -DBOOST_LIBRARYDIR="$env:BOOST_ROOT_1_72_0"\lib -Bbuild
+
+      - name: Build
+        run: cmake -DBOOST_ROOT="$env:BOOST_ROOT_1_72_0" -DBOOST_INCLUDEDIR="$env:BOOST_ROOT_1_72_0"\boost\include -DBOOST_LIBRARYDIR="$env:BOOST_ROOT_1_72_0"\lib --build build
