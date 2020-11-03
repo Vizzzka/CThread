@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(adder
         VERSION 1.0.0
-        DESCRIPTION "Add two numbers"
+        DESCRIPTION "Cross Platfrom Multithreading library"
         HOMEPAGE_URL "https://github.com/chernetskyi/cpp-template"
         LANGUAGES C CXX)
 
@@ -16,19 +16,25 @@ option(ENABLE_SANITIZERS    "Use sanitizers to detect errors."      OFF) # Optio
 
 # Project source compilation
 include_directories(inc)
-add_library(arithmetic STATIC
-            src/arithmetic/arithmetic.cpp inc/arithmetic/arithmetic.hpp)
+add_library(multithreading STATIC
+        src/multithreading/EventClass.cpp
+        inc/multithreading/EventClass.hpp
+        src/multithreading/Thread.cpp
+        inc/multithreading/Thread.hpp
+        src/multithreading/MutexClass.cpp
+        inc/multithreading/MutexClass.hpp)
 add_executable(add src/main.cpp)
-target_link_libraries(add arithmetic)
+target_link_libraries(add multithreading)
 
 # Add external packages
 set(Boost_USE_STATIC_LIBS ON)
 find_package(Boost 1.71.0 COMPONENTS program_options REQUIRED)
+find_package (Threads)
 include_directories(${Boost_INCLUDE_DIR})
-target_link_libraries(add Boost::program_options)
+target_link_libraries(add Boost::program_options ${CMAKE_THREAD_LIBS_INIT})
 
 # Define ALL_TARGETS variable to use in some directives
-set(ALL_TARGETS arithmetic add)
+set(ALL_TARGETS multithreading add)
 
 # Include default CMake configuration
 include(cmake/Config.cmake)
