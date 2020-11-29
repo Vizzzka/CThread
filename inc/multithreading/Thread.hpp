@@ -51,6 +51,7 @@ typedef unsigned char BOOL;
 typedef long DWORD;
 typedef void *LPVOID;
 #else
+#define _AFXDLL
 #include "afx.h"
 #include <windows.h>
 #include <stdio.h>

@@ -9,9 +9,13 @@
 //
 //
 
+
 #include "multithreading/Thread.hpp"
 #include <iostream>
+#include <windows.h>
 using namespace std;
+
+
 
 /*
  * CIncrementThread
@@ -138,10 +142,9 @@ public:
     ~MyTaskClass(){}
 };
 
-int
-main(int argc,
-     char *argv[] )
+int main(int argc, char *argv[] )
 {
+	SetConsoleOutputCP(CP_UTF8);
     int increment=10;
 
     CIncrementThread *pThreadInc;
