@@ -1,15 +1,3 @@
-//
-// main.cpp: implements and tests CThread and CTask classes
-//
-// Copyright (C) Walter E. Capers.  All rights reserved
-//
-// This source is free to use as you like.  If you make
-// any changes, keep me in the loop.  Email your changes
-// to walt.capers@comcast.net.
-//
-//
-
-
 #include "multithreading/Thread.hpp"
 #include <iostream>
 #include <windows.h>
