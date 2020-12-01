@@ -1,27 +1,3 @@
-//
-// EventClass.cpp: implementation file
-//
-// Copyright (C) Walter E. Capers.  All rights reserved
-//
-// This source is free to use as you like.  If you make
-// any changes please keep me in the loop.  Email them to
-// walt.capers@comcast.net.
-//
-// PURPOSE:
-//
-//  To implement event signals as a C++ object
-//
-// REVISIONS
-// =======================================================
-// Date: 10.25.07        
-// Name: Walter E. Capers
-// Description: File creation
-//
-// Date: 11/02/07
-// Name: Walter E. Capers
-// Description: removed unnessary code identified by On Freund from Code Project
-//
-//
 #include "multithreading/Thread.hpp"
 
 
@@ -29,9 +5,7 @@
 
 using namespace std;
 
-CEventClass::CEventClass(void)
-:m_bCreated(TRUE)
-{
+CEventClass::CEventClass(void):m_bCreated(TRUE) {
 	memset(&m_owner,0,sizeof(ThreadId_t));
 #ifdef WINDOWS
 	m_event = CreateEvent(NULL,FALSE,FALSE,NULL);
@@ -66,9 +40,7 @@ CEventClass::~CEventClass(void)
  * set an event to signaled
  *
  **/
-void
-CEventClass::Set()
-{
+void CEventClass::Set() {
 #ifdef WINDOWS
 	SetEvent(m_event);
 #else
@@ -84,10 +56,7 @@ CEventClass::Set()
  * call to reset within the same thread.
  *
  **/
-BOOL
-CEventClass::Wait()
-{
-
+BOOL CEventClass::Wait() {
 	try
 	{
 		ThreadId_t id = CThread::ThreadId();
@@ -137,8 +106,7 @@ CEventClass::Wait()
  *
  **/
 void
-CEventClass::Reset()
-{
+CEventClass::Reset() {
 	try 
 	{
 		ThreadId_t id = CThread::ThreadId();

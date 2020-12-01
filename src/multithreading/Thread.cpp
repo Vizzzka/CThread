@@ -1,141 +1,16 @@
-//
-// Thread.cpp: implementation file
-//
-// Copyright (C) Walter E. Capers.  All rights reserved
-//
-// This source is free to use as you like.  If you make
-// any changes please keep me in the loop.  Email your changes
-// to walt.capers@comcast.net.
-//
-// PURPOSE:
-//
-//  To implement threading as a C++ object
-//
-// NOTES:
-//  This object supports two types of thread models, event driven and
-//  interval driven.  Under the event driven model, a thread waits
-//  in a paused state until the member function Event is called.  When
-//  the Event function is called the thread wakes up and calls OnTask.
-//  Under the interval driven model, the thread wakes up every
-//  m_dwIdle milli-seconds and calls OnTask.
-//
-//  You can switch between the two models from within the same object.
-//
-// COMPILER NOTES:
-// On Unix you must use -lpthread a -lrt
-// On Windows you must specify threaded under C++ code generation
-//
-// REVISIONS
-// =======================================================
-// Date: 10.24.07        
-// Name: Walter E. Capers
-// Description: File creation
-//
-// Date: 10.24.07 11:49 am
-// Name: Walter E. Capers
-// Description: Added SetIdle function to allow the idle time to be altered
-//              independent of the SetThreadType member function.
-//              Added sleep interval to Stop function.
-//
-// Date: 10.25.07
-// Name: Walter E. Capers
-// Description: Added support for other non-windows platforms.
-//
-//              Added static functions: ThreadIdsEqual and ThreadId.
-//
-//              Added que for handling multiple events.
-//
-//              Created the CEventClass and CMutexClass classes to facilitate
-//              platform independence.
-//
-// Date: 10.26.07
-// Name: Walter E. Capers
-// Description: Made object production ready...
-//              Added more comments
-//
-//              Addressed various issues with threads on UNIX systems.
-//                -- there was a defect in the Sleep function
-//                -- there was a defect in the main thread function THKERNEL
-//                   , when transitioning between thread models the CEvent::Reset
-//                   function was not being called when it was necessary resulting
-//                   in a lock up.
-//              
-//				 Transition between thread types also failed on WINDOWS since the Event
-//               member function was being called from within SetThreadType.  This
-//               resulted in an Event usage error.  To correct the problem m_event.Set
-//               is called instead.  Also, eliminated unecessary logic.
-//
-//               Got rid of OnStart, OnStop, OnDestroy... Could not override with a derived
-//				 class, not sure why I will come back to in a later release.
-//
-//				 Changed default behavior of thread.  If OnTask is not redefined in the derived
-//               class the default version now expects a CTask object.  The Class for CTask 
-//               is defined in thread.h.  A class must be derived from CTask to use it in
-//               the default version of OnTask(LPVOID).
-//
-// Date: 11.01.07
-// Name: Walter E. Capers
-// Description: I introduced more logic and ASSERTIONS to insure the integrity of CThread objects.  
-//              Both the Homogeneous and Specialized thread types can be physically set using the 
-//              SetThreadType member function.  If the thread type is not set, the thread will
-//              determine its type based on calls to member functions; however, this does not
-//              apply to interval-based threads.  Interval-based threads must be implicitly
-//              identified using the SetThreadType member function.  The new integrity tests
-//              are implemented to insure usage consistency with a CThread object.   
-//
-//              New member functions AtCapacity and PercentCapacity were added to determine
-//              if a thread is truly busy.  AtCapacity will return TRUE under one of two 
-//              conditions: the thread is processing an event and its stack is full, the thread
-//              is not running.  These new functions allow thread objects to be placed in arrays
-//              and tasked based on their workloads.
-//
-//              The Event member function has been modified to verify that a thread is running
-//              before posting an event.  This resolved a problem on SunOS were threads did not
-//              start right away; there was a small delay of a few milliseconds.    
-//
-//              Error flags are automatically reset when certain member functions are called this
-//              isolates error occurrences to specific call sequences.
-//
-//
-// Date: 11.01.07
-// Name: Walter E. Capers
-// Description: In THKernel, changed how events are released.  Events are now released right after
-//              They are recieved.
-
 #include "multithreading/Thread.hpp"
 #ifdef USE_BEGIN_THREAD
 #include <process.h>
 #endif
 
 
-#ifndef WINDOWS
-extern "C"
-{
- int	usleep(useconds_t useconds);
-#ifdef NANO_SECOND_SLEEP
- int 	nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
-#endif
-}
 
-void Sleep( unsigned int milli )
-{
-#ifdef NANO_SECOND_SLEEP
-	struct timespec interval, remainder;
-	milli = milli * 1000000;
-	interval.tv_sec= 0;
-	interval.tv_nsec=milli;
-	nanosleep(&interval,&remainder);
-#else
-	usleep(milli*1000);
-#endif	
-}
-#endif
 
 #include <iostream>
 using namespace std;
 
 /**
- * 
+ *
  * _THKERNEL
  * thread callback function used by CreateThread
  *
@@ -150,8 +25,7 @@ DWORD WINAPI
 #else
 LPVOID
 #endif
-_THKERNEL( LPVOID lpvData /* CThread Object */ 
-		  )
+_THKERNEL( LPVOID lpvData /* CThread Object */)
 {
 	CThread *pThread = (CThread *)lpvData;
 	ThreadType_t lastType;
@@ -161,8 +35,7 @@ _THKERNEL( LPVOID lpvData /* CThread Object */
 	 *
 	 */
 
-
-    pThread->m_mutex.Lock();
+        pThread->m_mutex.Lock();
 		pThread->m_state = ThreadStateWaiting;
 		pThread->m_bRunning = TRUE;
 #ifndef WINDOWS
@@ -506,11 +379,11 @@ CThread::KernelProcess()
 
 
 /**
- * 
+ *
  * GetEventsPending
  * returns the total number of vents waiting
  * in the event que
- * 
+ *
  **/
 unsigned int
 CThread::GetEventsPending()
@@ -668,12 +541,6 @@ CThread::Empty()
 
 
 
-/**
- *
- * Push
- * place a data object in the threads que
- *
- **/
 BOOL
 CThread::Push( LPVOID lpv )
 {

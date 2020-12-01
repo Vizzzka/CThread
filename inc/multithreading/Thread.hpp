@@ -1,33 +1,3 @@
-//
-// Thread.h: header file
-//
-// Copyright (C) Walter E. Capers.  All rights reserved
-//
-// This source is free to use as you like.  If you make
-// any changes please keep me in the loop.  Email them to
-// walt.capers@comcast.net.
-//
-// PURPOSE:
-//
-//  To implement Win32 threading as a C++ object
-//
-// REVISIONS
-// =======================================================
-// Date: 10.24.07        
-// Name: Walter E. Capers
-// Description: File creation
-//
-// Date: 10.24.07 11:49 am
-// Name: Walter E. Capers
-// Description: Added SetIdle function to allow the idle time to be altered
-//              independent of the SetThreadType member function.
-// Date: 10.31.07
-// Name: Walter E. Capers
-// Description: Added support for beginthreadex
-//              To use compile with -DUSE_BEGIN_THREAD
-//
-//
-
 #ifndef THREAD_CLASS
 #define THREAD_CLASS
 
