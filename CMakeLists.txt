@@ -22,8 +22,10 @@ add_library(multithreading STATIC
         src/multithreading/Thread.cpp
         inc/multithreading/Thread.hpp
         src/multithreading/MutexClass.cpp
-        inc/multithreading/MutexClass.hpp)
-add_executable(add src/main.cpp)
+        inc/multithreading/MutexClass.hpp
+        src/multithreading/ThreadPool.cpp
+        inc/multithreading/ThreadPool.h)
+add_executable(add src/main.cpp inc/multithreading/ThreadPool.h)
 target_link_libraries(add multithreading)
 
 # Add external packages

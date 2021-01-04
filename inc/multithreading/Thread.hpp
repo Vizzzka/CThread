@@ -1,3 +1,10 @@
+/**
+ *  @file   Thread.hpp
+ *  @brief  Thread Class
+ *  @author Victoria Usachova
+ *  @date   2020-01-04
+ ***********************************************/
+
 #ifndef THREAD_CLASS
 #define THREAD_CLASS
 
@@ -42,7 +49,6 @@ typedef DWORD ThreadId_t;
 #include "MutexClass.hpp"
 #include "EventClass.hpp"
 
-#define QUEUE_SIZE 100
 #define DEFAULT_STACK_SIZE 0
 #ifndef WINDOWS
 void Sleep( unsigned int mseconds);
@@ -57,7 +63,6 @@ void Sleep( unsigned int mseconds);
 #endif
 #endif
 
-
 typedef enum {
 	ThreadStateBusy,               // thread is currently handling a task
 	ThreadStateWaiting,            // thread is waiting for something to do
@@ -67,98 +72,37 @@ typedef enum {
 	                               // be launched
 } ThreadState_t;
 
-typedef enum {
-	ThreadTypeHomogeneous,
-	ThreadTypeSpecialized,
-    ThreadTypeIntervalDriven,
-    ThreadTypeNotDefined } ThreadType_t;
-
-
-typedef enum {
-	TaskStatusNotSubmitted,
-	TaskStatusWaitingOnQueue,
-	TaskStatusBeingProcessed,
-	TaskStatusCompleted } TaskStatus_t;
-
-class CTask
+/// @brief Interface for creating thread and manipulating it.
+/// @details Interface must be implemented to create runnable object.
+/// @author Vizzzka
+struct IRunnable
 {
-private:
-	TaskStatus_t m_state;
-	ThreadId_t m_dwThread;
-public:
-	CMutexClass m_mutex;
-
-	void SetTaskStatus(TaskStatus_t state) 
-	{
-		m_mutex.Lock();
-			m_state=state;
-		m_mutex.Unlock();
-	}
-
-	void SetId(ThreadId_t *pid)
-	{
-		memcpy(&m_dwThread,pid,sizeof(ThreadId_t));
-	}
-
-	/**
-	 *
-	 * Wait
-	 * waits for upto timeoutSeconds for a task
-	 * to complete
-	 *
-	 **/
-	BOOL Wait(int timeoutSeconds)
-	{
-        timeoutSeconds = timeoutSeconds * 1000;
-		if( Status() != TaskStatusCompleted &&
-			timeoutSeconds > 0 )
-		{
-			Sleep(100);
-			timeoutSeconds = timeoutSeconds - 100;
-		}
-		if( Status() == TaskStatusCompleted ) return TRUE;
-		return FALSE;
-	}
-
-	/**
-	 *
-	 * Status
-	 * returns current state of a task
-	 *
-	 **/
-	TaskStatus_t Status()
-	{
-		TaskStatus_t state ;
-
-		m_mutex.Lock();
-		  state = m_state;
-		m_mutex.Unlock();
-	    return state;
-	}
-
-	void Thread(ThreadId_t *pId)
-	{
-		memcpy(pId,&m_dwThread,sizeof(ThreadId_t));
-	}
-
-	CTask(){m_state=TaskStatusNotSubmitted; memset(&m_dwThread,0,sizeof(ThreadId_t)); }
-	~CTask(){}
-	virtual BOOL Task()=0;
+	/// @brief thread function to run
+	virtual void run() = 0;
 };
 
+/// @brief Interface for creating thread and manipulating it.
+/// @details Interface must be implemented to create callable object.
+/// @author Vizzzka
+template <class T> struct ICallable {
+	/// @brief thread function to call
+	virtual T call() = 0;
+};
 
+/// @brief Class for creating thread and manipulating it.
+/// @author Vizzzka
 class CThread 
 #ifdef WINDOWS
-	: public CObject // use CObject as a base class so object can be used in lists and
-	               // object arrays
+	: public CObject // use CObject as a base class so object can be used in lists and object arrays
 #endif
 {
 private:
+	IRunnable *_threadObj;          // Win32 and POSIX compatible thread parameter and procedure
 	CEventClass   m_event;         // event controller
+	CMutexClass	  m_mutex;         // mutex that protects threads internal data
 	int           m_StopTimeout;   // specifies a timeout value for stop
 	                               // if a thread fails to stop within m_StopTimeout
 	                               // seconds an exception is thrown
-
 	BOOL		  m_bRunning;      // set to TRUE if thread is running
 #ifdef WINDOWS
 	HANDLE		  m_thread;		   // thread handle
@@ -166,44 +110,39 @@ private:
 	pthread_t     m_thread;        // thread handle
 #endif
 	ThreadId_t	  m_dwId;          // id of this thread
-	LPVOID        *m_lppvQueue;    // task que
-	unsigned int  m_chQueue;       // que depth
-	unsigned int  m_queuePos;      // current que possition
-	LPVOID        m_lpvProcessor;  // data which is currently being processed
 	ThreadState_t m_state;         // current state of thread see thread state data
 	                               // structure.
 	DWORD         m_dwIdle;        // used for Sleep periods
-	ThreadType_t  m_type;
 	DWORD		  m_stackSize;     // thread stack size
 #define NO_ERRORS			       0
 #define MUTEX_CREATION		       0x01
 #define EVENT_CREATION		       0x02
 #define THREAD_CREATION		       0x04
 #define UNKNOWN					   0x08
-#define ILLEGAL_USE_OF_EVENT       0x10
 #define MEMORY_FAULT               0x20
 #define EVENT_AND_TYPE_DONT_MATCH  0x40
 #define STACK_OVERFLOW             0x80
 #define STACK_EMPTY                0x100
 #define STACK_FULL                 0x200
 
-	DWORD         m_dwObjectCondition;
-	BOOL		  Push(LPVOID lpv);
-	BOOL		  Pop();
-	BOOL		  Empty();
 public:
-	/**
-	 *
-	 * user definable member functions
-	 *
-	 **/
-	CMutexClass	  m_mutex;         // mutex that protects threads internal data
+	/// @brief Construct create thread from given Runnable object.
+	///
+	/// @pre ptr object must implement IRunnable interface.
+	///
+	/// @param ptr pointer to object from which thread would be created
+	///
+	CThread(IRunnable *ptr);
 
-	virtual BOOL OnTask(LPVOID lpvData);     // called when an event occurs
-	virtual BOOL OnTask();                   // called when a time interval has elapsed
-
-	CThread(void);
+	/// Class destructor
 	~CThread(void);
+
+	/// Copy constructor
+	CThread(CThread const&) = delete;
+
+	/// Copy-assignment operator
+	CThread& operator=(CThread const&) = delete;
+
 #ifdef WINDOWS
 #ifdef USE_BEGIN_THREAD
 	friend unsigned __stdcall _THKERNEL(LPVOID lpvData);
@@ -213,42 +152,53 @@ public:
 #else
 	friend LPVOID _THKERNEL(LPVOID lpvData);
 #endif
-	BOOL        FromSameThread();
-	float		PercentCapacity();
-	void        WaitTillExit();
-	BOOL		KernelProcess();
-	BOOL		Event(LPVOID lpvData=NULL);
-	BOOL        Event(CTask *pvTask);
-	void		SetOnStopTimeout(int seconds ) { m_StopTimeout = seconds; }
-    BOOL        SetQueueSize( unsigned int ch );
-	BOOL		Stop();
+
+	/// @brief waits until thread ends its execution
+	/// @details if thread is not running do nothing
+	void        Join();
+
+	/// @brief start the execution of the thread
+	/// @details Could not be started from itself, throws exception in this case.
+	/// If thread is already started do nothing and returns TRUE.
+	/// Close thread handle if needed. Change thread status to ThreadStateWaiting before
+	/// starting and to ThreadStateFault if thread was not created sucsessfully
+	/// @return BOOl. Either thread was sucsessfully created or not
 	BOOL		Start();
-	void		GetId(ThreadId_t *pId) { memcpy(pId,&m_dwId,sizeof(ThreadId_t)); }      // returns thread id
+
+	/// @brief Get unique id of the thread
+	/// @param pId pointer to where thread id would be stored
+	void		GetId(ThreadId_t *pId) { memcpy(pId,&m_dwId,sizeof(ThreadId_t)); }
+
+	/// @brief Get current state of the tread
+	/// @details 	ThreadStateWaiting, ThreadStateDown, ThreadStateShuttingDown, ThreadStateFault
+	/// @return ThreadState_t
 	ThreadState_t ThreadState();
+
+	/// @brief ping the thread
 	BOOL		PingThread(DWORD dwTimeout=0);
-	BOOL        AtCapacity();
+
+	/// @brief Check is thread running or not
+	/// @return BOOL
+	BOOL        isAlive();
+
+	/// @brief Get priority of thread execution
+	/// @return int
+	DWORD         GetPriority();
+
 #ifdef WINDOWS
+	/// @brief Set priority of thread execution
+	/// @param dwPriority Priority of the thread to set.
+	/// Default value is THREAD_PRIORITY_NORMAL
 	void		SetPriority(DWORD dwPriority=THREAD_PRIORITY_NORMAL);
 #else
+	/// @brief Set priority of thread execution
+	/// @param dwPriority Priority of the thread to set.
+	/// Default value is THREAD_PRIORITY_NORMAL
 	void		SetPriority(DWORD dwPriority=0);
 #endif
-	DWORD		GetErrorFlags() { return m_dwObjectCondition; } // returns state of object
-	void		SetThreadType(ThreadType_t typ=ThreadTypeNotDefined,DWORD dwIdle=100);
-	void		SetIdle(DWORD dwIdle=100);
-    unsigned int GetEventsPending();
-    static BOOL ThreadIdsEqual(ThreadId_t *p1,
-						       ThreadId_t *p2)
-	{
-#if defined(AS400)||defined(OS400)
-		return(( memcmp(p1,p2,sizeof(ThreadId_t))==0)?TRUE:FALSE);
-#elif defined(VMS) 
-		return (( pthread_equal(*p1,*p2) )?TRUE:FALSE );
-#else
-		return ((*p1 == *p2)?TRUE:FALSE);
-#endif
 
-	}
-
+	/// @brief Get id of the current thread
+	/// @return ThreadId_t
 	static ThreadId_t ThreadId()
 	{
 		ThreadId_t thisThreadsId ;
@@ -276,7 +226,21 @@ public:
 		return thisThreadsId;
 	}
 
+	static BOOL ThreadIdsEqual(ThreadId_t *p1,
+	                           ThreadId_t *p2)
+	{
+#if defined(AS400)||defined(OS400)
+		return(( memcmp(p1,p2,sizeof(ThreadId_t))==0)?TRUE:FALSE);
+#elif defined(VMS)
+		return (( pthread_equal(*p1,*p2) )?TRUE:FALSE );
+#else
+		return ((*p1 == *p2)?TRUE:FALSE);
+#endif
 
+	}
+
+private:
+	BOOL        FromSameThread();
 };
 #endif
 

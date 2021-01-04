@@ -4,9 +4,8 @@
 #endif
 
 
-
-
 #include <iostream>
+
 using namespace std;
 
 /**
@@ -28,56 +27,20 @@ LPVOID
 _THKERNEL( LPVOID lpvData /* CThread Object */)
 {
 	CThread *pThread = (CThread *)lpvData;
-	ThreadType_t lastType;
-	/*
-	 *
-	 * initialization
-	 *
-	 */
 
-        pThread->m_mutex.Lock();
-		pThread->m_state = ThreadStateWaiting;
-		pThread->m_bRunning = TRUE;
+	pThread->m_mutex.Lock();
 #ifndef WINDOWS
 		pThread->m_dwId = CThread::ThreadId();
 #endif
 	pThread->m_mutex.Unlock();
-	
-	while( TRUE )
-	{
-		lastType = pThread->m_type;
-
-		if( lastType == ThreadTypeHomogeneous ||
-			lastType == ThreadTypeSpecialized ||
-			lastType == ThreadTypeNotDefined )
-		{
-			if( ! pThread->m_event.Wait()  )  // wait for a message
-					break;
-			pThread->m_event.Reset(); // message recieved
-		}
-	
-		if( ! pThread->KernelProcess() ) 
-				break;
 
 
-		/*if( lastType == ThreadTypeHomogeneous ||
-			lastType == ThreadTypeSpecialized ||
-			lastType == ThreadTypeNotDefined )
-		{
-			pThread->m_event.Reset();
-		} */
-
-		if( pThread->m_type == ThreadTypeIntervalDriven )
-			Sleep(pThread->m_dwIdle);
-
-	}
-
+	((IRunnable*)pThread->_threadObj)->run();
 
 	pThread->m_mutex.Lock();
 		pThread->m_state = ThreadStateDown;
 		pThread->m_bRunning = FALSE;
 	pThread->m_mutex.Unlock();
-
 
 #ifdef WINDOWS
 	return 0;
@@ -90,7 +53,7 @@ _THKERNEL( LPVOID lpvData /* CThread Object */)
  *
  * FromSameThread
  * determines if the calling thread is the same
- * as the thread assoicated with the object
+ * as the thread assoiated with the object
  *
  **/
 BOOL
@@ -103,217 +66,13 @@ CThread::FromSameThread()
 
 /**
  *
- * OnTask
- * called when a thread is tasked using the Event
- * member function
- *
- **/
-BOOL 
-CThread::OnTask( LPVOID lpvData /*data passed from thread*/ 
-					   )
-{
-    ASSERT(lpvData && m_type == ThreadTypeHomogeneous);
-
-	if( m_type != ThreadTypeHomogeneous )
-	{
-		cerr << "Warning CThread::OnTask:\n\tOnTask(LPVOID) called for a non-homogeneous thread!\n";
-		return FALSE;
-	}
-
-	((CTask *)lpvData)->SetTaskStatus(TaskStatusBeingProcessed);
-	BOOL bReturn = ((CTask *)lpvData)->Task();
-	((CTask *)lpvData)->SetTaskStatus(TaskStatusCompleted);
-
-	return bReturn; 
-} 
-
-
-
-/**
- *
- * OnTask
- * overloaded implementation of OnTask that
- * takes no arguments
- *
- **/
-BOOL
-CThread::OnTask()
-{
-	ASSERT(m_type == ThreadTypeIntervalDriven);
-	if( m_type != ThreadTypeIntervalDriven )
-	{
-		cerr << "Warning CThread::OnTask:\n\tOnTask() called for a non-event driven thread!\n";
-		return FALSE;
-	}
-
-	printf("\nthread is alive\n");
-
-	return TRUE;
-}
-
-/**
- *
- * CEvent
- * used to place tasks on the threads event queue
- * wakes up thread.
- *
- **/
-BOOL
-CThread::Event(CTask *pvTask /* data to be processed by thread */
-			   )
-{
-	m_mutex.Lock();
-
-	ASSERT(m_type == ThreadTypeHomogeneous ||
-	       m_type == ThreadTypeNotDefined );
-
-	try 
-	{
-		if( FromSameThread() )
-		{
-			throw "\n\tit is illegal for a thread to place an event on its own event stack!\n";
-		}
-
-
-		// make sure that the thread is running 
-		if( !m_bRunning && m_dwObjectCondition == NO_ERRORS )
-		{
-			m_mutex.Unlock();
-			PingThread(m_dwIdle*2); // wait two idle cycles for it to start
-			m_mutex.Lock();
-		}
-		if( !m_bRunning ) // if it is not running return FALSE;
-		{
-			m_mutex.Unlock();
-			return FALSE;
-		}
-
-
-		if( m_dwObjectCondition & ILLEGAL_USE_OF_EVENT )
-			m_dwObjectCondition = m_dwObjectCondition ^ ILLEGAL_USE_OF_EVENT;
-		if( m_dwObjectCondition & EVENT_AND_TYPE_DONT_MATCH)
-			m_dwObjectCondition = m_dwObjectCondition ^ EVENT_AND_TYPE_DONT_MATCH;
-
-		if( m_type != ThreadTypeHomogeneous &&
-			m_type != ThreadTypeNotDefined    )
-		{
-			m_mutex.Unlock();
-			m_dwObjectCondition |= ILLEGAL_USE_OF_EVENT;
-			m_dwObjectCondition |= EVENT_AND_TYPE_DONT_MATCH;
-			m_state = ThreadStateFault;
-			cerr << "Warning: invalid call to CEvent::Event(CTask *), thread type is not specialized\n";
-
-			return FALSE;
-		}
-
-		m_type = ThreadTypeHomogeneous;
-		m_mutex.Unlock();
-
-		pvTask->SetId(&m_dwId);
-		if( ! Push((LPVOID)pvTask) )
-			return FALSE;
-
-		pvTask->SetTaskStatus(TaskStatusWaitingOnQueue);
-		m_event.Set();
-
-	}
-	catch (char *psz)
-	{
-#ifdef WINDOWS
-		MessageBoxA(NULL,&psz[2],"Fatal exception CThread::CEvent",MB_ICONHAND);
-		exit(-1);
-#else
-		cerr << "Fatal exception CThread::CEvent(CTask *pvTask):" << psz;
-#endif
-
-	}
-	return TRUE;
-}
-
-/**
- *
- * Event
- * used to place tasks on the threads event queue
- * wakes up thread.
- *
- **/
-BOOL
-CThread::Event(LPVOID lpvData /* data to be processed by thread */
-			   )
-{
-
-	m_mutex.Lock();
-	ASSERT( m_type == ThreadTypeSpecialized ||
-		    m_type == ThreadTypeNotDefined );
-	try 
-	{
-		if( FromSameThread() )
-		{
-			throw "\n\tit is illegal for a thread to place an event on its own event stack!\n";
-		}
-	}
-	catch (char *psz)
-	{
-#ifdef WINDOWS
-		MessageBoxA(NULL,&psz[2],"Fatal exception CThread::CEvent",MB_ICONHAND);
-		exit(-1);
-#else
-		cerr << "Fatal exception CThread::CEvent(LPVOID lpvData):" << psz;
-#endif
-
-	}
-
-	// make sure that the thread is running 
-	if( !m_bRunning && m_dwObjectCondition == NO_ERRORS )
-	{
-		m_mutex.Unlock();
-		  PingThread(m_dwIdle*2); // wait two idle cycles for it to start
-		m_mutex.Lock();
-	}
-	if( !m_bRunning ) // if it is not running return FALSE;
-	{
-		m_mutex.Unlock();
-		return FALSE;
-	}
-
-	if( m_dwObjectCondition & ILLEGAL_USE_OF_EVENT )
-		m_dwObjectCondition = m_dwObjectCondition ^ ILLEGAL_USE_OF_EVENT;
-	if( m_dwObjectCondition & EVENT_AND_TYPE_DONT_MATCH)
-		m_dwObjectCondition = m_dwObjectCondition ^ EVENT_AND_TYPE_DONT_MATCH;
-
-	if( m_type != ThreadTypeSpecialized && 
-		m_type != ThreadTypeNotDefined )
-	{
-		m_dwObjectCondition |= ILLEGAL_USE_OF_EVENT;
-		m_dwObjectCondition |= EVENT_AND_TYPE_DONT_MATCH;
-		cerr << "Warning: invalid call to CEvent::Event(LPVOID), thread type is not specialized\n";
-		m_mutex.Unlock();
-		return FALSE;
-	}
-	m_type = ThreadTypeSpecialized;
-
-	m_mutex.Unlock();
-	if( ! Push(lpvData) )
-	{
-		return FALSE;
-	}
-
-	m_event.Set();
-
-	return TRUE;
-}
-
-
-/**
- *
  * SetPriority
  * sets a threads run priority, see SetThreadPriority
  * Note: only works for Windows family of operating systems
  *
  *
  **/
-void
-CThread::SetPriority(DWORD dwPriority)
+void CThread::SetPriority(DWORD dwPriority)
 {
 
 #ifdef WINDOWS
@@ -321,91 +80,25 @@ CThread::SetPriority(DWORD dwPriority)
 #endif
 }
 
+BOOL CThread::isAlive() {
+	return m_bRunning;
+}
+
+DWORD CThread::GetPriority() {
+#ifdef WINDOWS
+	return GetThreadPriority(m_thread);
+#endif
+	return 0;
+}
+
 	  
 /**
- *
- * KernelProcess
- * routes thread activity
- *
- **/
-BOOL
-CThread::KernelProcess()
-{
-
-	m_mutex.Lock();
-	m_state = ThreadStateBusy;
-	if( !m_bRunning )
-	{
-		m_state = ThreadStateShuttingDown;
-		m_mutex.Unlock();
-		return FALSE;
-	}
-	m_mutex.Unlock();
-
-	if( !Empty() )
-	{
-		while( !Empty() )
-		{
-			Pop();
-			if( !OnTask(m_lpvProcessor) )
-			{
-				m_mutex.Lock();
-				m_lpvProcessor = NULL;
-				m_state = ThreadStateShuttingDown;
-				m_mutex.Unlock();
-				return FALSE;
-			}
-		}
-		m_mutex.Lock();
-		m_lpvProcessor = NULL;
-		m_state = ThreadStateWaiting;
-	}
-	else {
-		if( !OnTask() )
-		{
-			m_mutex.Lock();
-			m_state = ThreadStateShuttingDown;
-			m_mutex.Unlock();
-			return FALSE;
-		}
-		m_mutex.Lock();
-		m_state = ThreadStateWaiting;
-	}
-
-	m_mutex.Unlock();
-
-	return TRUE;
-}
-
-
-/**
- *
- * GetEventsPending
- * returns the total number of vents waiting
- * in the event que
- *
- **/
-unsigned int
-CThread::GetEventsPending()
-{
-	unsigned int chEventsWaiting;
-
-	m_mutex.Lock();
-	  chEventsWaiting = m_queuePos;
-    m_mutex.Unlock();
-
-	return chEventsWaiting;
-}
-
-
-/**
- *
  * CThread
  * instanciates thread object and
  * starts thread.
  *
  **/
-CThread::CThread(void)
+CThread::CThread(IRunnable *ptr)
 :m_bRunning(FALSE)
 #ifdef WINDOWS
 ,m_thread(NULL)
@@ -413,30 +106,13 @@ CThread::CThread(void)
 ,m_dwId(0L)
 ,m_state(ThreadStateDown)
 ,m_dwIdle(100)
-,m_lppvQueue(NULL)
-,m_lpvProcessor(NULL)
-,m_chQueue(QUEUE_SIZE)
-,m_type(ThreadTypeNotDefined)
 ,m_stackSize(DEFAULT_STACK_SIZE)
-,m_queuePos(0)
 ,m_StopTimeout(30)
 {
-
-	m_dwObjectCondition = NO_ERRORS;
-
-	m_lppvQueue = new LPVOID [QUEUE_SIZE];
-
-	if( !m_lppvQueue ) 
-	{
-		m_dwObjectCondition |= MEMORY_FAULT;
-		m_state = ThreadStateFault;
-		return;
-	}
 
 	if( !m_mutex.m_bCreated )
 	{
 		perror("mutex creation failed");
-		m_dwObjectCondition |= MUTEX_CREATION;
 		m_state = ThreadStateFault;
 		return;
 	}
@@ -445,282 +121,12 @@ CThread::CThread(void)
 	if( !m_event.m_bCreated )
 	{
 		perror("event creation failed");
-		m_dwObjectCondition |= EVENT_CREATION;
 		m_state = ThreadStateFault;
 		return;
 	}
 
+	_threadObj = ptr;
 
-	Start();
-
-}
-
-
-/**
- *
- * PercentCapacity
- * returns a floating point value identifying
- * the current workload of the thread
- *
- **/
-float
-CThread::PercentCapacity()
-{
-	float fValue = 0;
-	m_mutex.Lock();
-		fValue = (float)m_queuePos/m_chQueue;
-	m_mutex.Unlock();
-	return fValue;
-}
-
-/**
- *
- * SetQueueSize
- * changes the threads queue size
- *
- **/
-BOOL
-CThread::SetQueueSize( unsigned int ch )
-{
-	LPVOID * newQueue = NULL;
-
-	m_mutex.Lock();
-	    ASSERT(ch > m_queuePos);
-
-	    if( ch <= m_queuePos )
-		{
-			cerr << "Warning CThread::SetQueueSize:\n\tthe new queue size is less than the number of tasks on a non-empty queue! Request ignored.\n";
-			m_mutex.Unlock();
-			return FALSE;
-		}
-
-		newQueue = new LPVOID [ch];
-		if(  !newQueue )
-		{
-			cerr << "Warning CThread::SetQueueSize:\n\ta low memory, could not reallocate queue!\n";
-			m_mutex.Unlock();
-			return FALSE;
-		}
-
-		for( unsigned int i=0;i<m_queuePos; i++ )
-		{
-			newQueue[i] = m_lppvQueue[i];
-		}
-
-		delete [] m_lppvQueue;
-
-		m_chQueue = ch;
-		m_lppvQueue = newQueue;
-
-	m_mutex.Unlock();
-
-	return TRUE;
-}
-
-
-
-/**
- *
- * Empty
- * returns a value of TRUE if there are no items on the threads que
- * otherwise a value of FALSE is returned.
- *
- **/
-BOOL
-CThread::Empty()
-{
-	m_mutex.Lock();
-	if( m_queuePos <= 0 )
-	{
-		m_mutex.Unlock();
-		return TRUE;
-	}
-	m_mutex.Unlock();
-	return FALSE;
-}
-
-
-
-BOOL
-CThread::Push( LPVOID lpv )
-{
-	if( !lpv ) return TRUE;
-
-	m_mutex.Lock();
-
-	if( m_queuePos+1 >= m_chQueue ) {
-		m_dwObjectCondition |= STACK_OVERFLOW;
-		m_mutex.Unlock();
-		return FALSE;
-	}
-	if( m_dwObjectCondition & STACK_EMPTY    )
-		m_dwObjectCondition = m_dwObjectCondition ^ STACK_EMPTY;
-
-	if( m_dwObjectCondition & STACK_OVERFLOW ) 
-		m_dwObjectCondition = m_dwObjectCondition ^ STACK_OVERFLOW;
-
-	m_lppvQueue[m_queuePos++] = lpv;
-	if( m_queuePos+1 >= m_chQueue )
-		m_dwObjectCondition |= STACK_FULL;
-
-	m_mutex.Unlock();
-	return TRUE;
-}
-
-
-/**
- *
- * Pop
- * move an object from the input que to the processor
- *
- **/
-BOOL
-CThread::Pop()
-{
-
-	m_mutex.Lock();
-	if( m_queuePos-1 < 0 )
-	{
-		m_queuePos = 0;
-		m_dwObjectCondition |= STACK_EMPTY;
-		m_mutex.Unlock();
-		return FALSE;
-	}
-	if( m_dwObjectCondition & STACK_EMPTY )
-		m_dwObjectCondition = m_dwObjectCondition ^ STACK_EMPTY;
-	if( m_dwObjectCondition & STACK_OVERFLOW )
-		m_dwObjectCondition = m_dwObjectCondition ^ STACK_OVERFLOW;
-	if( m_dwObjectCondition & STACK_FULL )
-		m_dwObjectCondition = m_dwObjectCondition ^ STACK_FULL;
-
-	m_queuePos--;
-	m_lpvProcessor = m_lppvQueue[m_queuePos];
-	m_mutex.Unlock();
-	return TRUE;
-}
-
-
-/**
- *
- * SetThreadType
- * specifies the type of threading that is to be performed.
- *
- * ThreadTypeEventDriven (default): an event must be physically sent
- *									to the thread using the Event member
- *									function.
- *
- * ThreadTypeIntervalDriven       : an event occurs automatically every 
- *                                  dwIdle milli seconds.
- *
- **/
-void
-CThread::SetThreadType(ThreadType_t typ,
-              DWORD dwIdle)
-{
-
-	try 
-	{
-		if( FromSameThread() )
-		{
-			throw "\n\tit is illegal for a thread to change its own type!\n";
-		}
-
-
-		m_mutex.Lock();
-		m_dwIdle = dwIdle;
-
-
-		if( m_type == typ ) {
-			m_mutex.Unlock();
-			return;
-		}
-		if( m_dwObjectCondition & ILLEGAL_USE_OF_EVENT )
-			m_dwObjectCondition = m_dwObjectCondition ^ ILLEGAL_USE_OF_EVENT;
-		if( m_dwObjectCondition & EVENT_AND_TYPE_DONT_MATCH )
-			m_dwObjectCondition = m_dwObjectCondition ^ EVENT_AND_TYPE_DONT_MATCH;
-
-		m_type = typ;
-
-
-		m_mutex.Unlock();
-		m_event.Set();
-	}
-	catch (char *psz)
-	{
-#ifdef WINDOWS
-		MessageBoxA(NULL,&psz[2],"Fatal exception CThread::SetThreadType",MB_ICONHAND);
-		exit(-1);
-#else
-		cerr << "Fatal exception CThread::SetThreadType(ThreadType_t typ):" << psz;
-#endif
-
-	}
-}
-
-
-/**
- *
- * Stop
- * stop thread 
- *
- **/
-BOOL
-CThread::Stop()
-{
-	try 
-	{
-		if( FromSameThread() )
-		{
-			throw "\n\tit is illegal for a thread to attempt to signal itself to stop!\n";
-		}
-
-		m_mutex.Lock();
-		m_bRunning = FALSE;
-		m_mutex.Unlock();
-		m_event.Set();
-
-		int ticks = (m_StopTimeout*1000)/100;
-
-		for( int i=0; i<ticks; i++ )
-		{
-			Sleep(100);
-
-			m_mutex.Lock();
-			if( m_state == ThreadStateDown )
-			{
-				m_mutex.Unlock();
-				return TRUE;
-			}
-			m_mutex.Unlock();
-
-		} 
-	}
-	catch (char *psz)
-	{
-#ifdef WINDOWS
-		MessageBoxA(NULL,&psz[2],"Fatal exception CThread::Stop",MB_ICONHAND);
-		exit(-1);
-#else
-		cerr << "Fatal exception CThread::Stop():" << psz;
-#endif
-
-	}
-	return FALSE;
-}
-
-
-/**
- *
- * SetIdle
- * changes the threads idle interval
- *
- **/
-void
-CThread::SetIdle(DWORD dwIdle)
-{
-	m_mutex.Lock();
-		m_dwIdle = dwIdle;
-	m_mutex.Unlock();
 }
 
 /**
@@ -739,7 +145,6 @@ CThread::Start()
 			throw "\n\tit is illegal for a thread to attempt to start itself!\n";
 		}
 
-
 		m_mutex.Lock();
 		if( m_bRunning ) 
 		{
@@ -750,11 +155,13 @@ CThread::Start()
 		m_mutex.Unlock();
 
 
-		if( m_dwObjectCondition & THREAD_CREATION )
-			m_dwObjectCondition = m_dwObjectCondition ^ THREAD_CREATION;
-
 #ifdef WINDOWS
 		if( m_thread ) CloseHandle(m_thread);
+
+		m_mutex.Lock();
+		m_state = ThreadStateWaiting;
+		m_bRunning = TRUE;
+		m_mutex.Unlock();
 #ifdef USE_BEGIN_THREAD
 		m_thread = (HANDLE )_beginthreadex(NULL,(unsigned int)m_stackSize,_THKERNEL,(LPVOID)this,0,&m_dwId);
 #else
@@ -763,7 +170,7 @@ CThread::Start()
 		if( !m_thread )
 		{
 			perror("thread creation failed");
-			m_dwObjectCondition |= THREAD_CREATION;
+			m_bRunning = FALSE;
 			m_state = ThreadStateFault;
 			return FALSE;
 		}
@@ -779,17 +186,21 @@ CThread::Start()
 		if( m_stackSize != 0 )
 			pthread_attr_setstacksize(&attr,m_stackSize);
 
+		m_mutex.Lock();
+		m_state = ThreadStateWaiting;
+		m_bRunning = TRUE;
+		m_mutex.Unlock();
+
 		int error = pthread_create(&m_thread,&attr,_THKERNEL,(LPVOID)this);
 
 		if( error != 0 )
 		{
-			m_dwObjectCondition |= THREAD_CREATION;
+			m_bRunning = FALSE;
 			m_state = ThreadStateFault;
 
 #if defined(HPUX) || defined(SUNOS) || defined(LINUX)
 			switch(error)/* show the thread error */
 			{
-
 			case EINVAL:
 				cerr << "error: attr in an invalid thread attributes object\n";
 				break;
@@ -835,27 +246,6 @@ CThread::Start()
 	return TRUE;
 }
 
-/**
- *
- * AtCapacity
- * returns TRUE if the threads queue is full, and the thread
- * is busy processing an event or the thread is not running
- *
- **/
-BOOL
-CThread::AtCapacity()
-{
-	m_mutex.Lock();
-		if( ((m_dwObjectCondition & STACK_OVERFLOW ||
-			  m_dwObjectCondition & STACK_FULL ) &&
-			  m_state == ThreadStateBusy) || !m_bRunning)
-		{
-			m_mutex.Unlock();
-			return TRUE;
-		}
-	m_mutex.Unlock();
-	return FALSE;
-}
 
 /**
  *
@@ -880,32 +270,11 @@ CThread::ThreadState()
  * allow for gracefull thread termination.
  *
  **/
-CThread::~CThread(void)
+CThread::~CThread()
 {
-	if( m_bRunning ) // gracefull termination
-	{
-		try 
-		{
-			if( !Stop() )
-			{
-				throw "\n\tthread failed to stop in a timely manner!\n";
-			}
-		}
-		catch( char *psz )
-		{
-#ifdef WINDOWS
-		    MessageBoxA(NULL,&psz[2],"Fatal exception CThread::Stop",MB_ICONHAND);
-		    exit(-1);
-#else
-			cerr << "Fatal exception CThread::Stop: " << psz;
-#endif
-		}
-	}
 #ifdef WINDOWS
 	CloseHandle(m_thread);
 #endif
-
-	delete [] m_lppvQueue;
 }
 
 
@@ -915,8 +284,7 @@ CThread::~CThread(void)
  * used to determine if a thread is running
  *
  **/
-BOOL
-CThread::PingThread(DWORD dwTimeout /* timeout in milli-seconds */
+BOOL CThread::PingThread(DWORD dwTimeout /* timeout in milli-seconds */
 				 )
 {
     DWORD dwTotal = 0;
@@ -945,26 +313,19 @@ CThread::PingThread(DWORD dwTimeout /* timeout in milli-seconds */
  * blocks caller until thread exits
  *
  **/
-void
-CThread::WaitTillExit()
+void CThread::Join()
 {
-
-	/*
-	 *
-	 * prevent users from calling this function from within the same thread
-	 * of execution
-	 *
-	 */
 	try 
 	{
 		if( FromSameThread() )
 			throw "\n\tthis function can not be called from within the same thread!\n";
 
-
-
-
-		if( !m_bRunning ) return;
-
+		m_mutex.Lock();
+		if( !m_bRunning ) {
+			m_mutex.Unlock();
+			return;
+		}
+		m_mutex.Unlock();
 
 #ifdef WINDOWS
 		WaitForSingleObject(m_thread,INFINITE);
@@ -977,10 +338,10 @@ CThread::WaitTillExit()
 	catch( char *psz )
 	{
 #ifdef WINDOWS
-		MessageBoxA(NULL,&psz[2],"Fatal exception CThread::WaitTillExit",MB_ICONHAND);
+		MessageBoxA(NULL,&psz[2],"Fatal exception CThread::Join",MB_ICONHAND);
 		exit(-1);
 #else
-		cerr << "Fatal exception CThread::WaitTillExit: " << psz;
+		cerr << "Fatal exception CThread::Join: " << psz;
 #endif
 
 	}
