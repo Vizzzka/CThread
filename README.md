@@ -2,12 +2,9 @@
 
 It is cross-platform object-oriented library of classes for multithreading in C++. The interface of this library is similar to Java 11.
 
-
 It uses WIN API and POSIX threads API to implement multithreading.
 
-
 It works on Windows/Linux/MacOS platforms. Classes which were implemented: CThread, CEvent, CMutexClass and CThreadPool. CEvent class gives wait/notify functionality.
-
 
 Complete doxygen documentation is located in /docs folder and unfortunatly is not currently hosting but could simply be opened in browser by yourself.
 
