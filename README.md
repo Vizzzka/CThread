@@ -36,8 +36,36 @@ Dependencies (such as development libraries) can be found in the [dependencies f
 
 ## Usage
 
-```bash
+The CThread class has following methods.
+
+Constructors takes pointer to the runnable object.  
+```c++
+CThread::CThread(IRunnable *ptr)
+```
+Start method invokes run() method which was implemented in runnable object of the thread.
+```c++
+void CThread::Start()
 ```
 
+Join method waits until the end of thread execution.
+```c++
+void CThread::Join()
+```
+
+Example of use:
+
+```c++
+// Example
+class MyRunnabmle : public IRunnable {
+    virtual void run() {
+	       std::cout << "Thread " << CThread::ThreadId() << " is running\n";
+	   }
+}
+CThread* my_thread = new CThread(new MyRunnable());
+my_thread->Start();
+my_thread->Join();
+```
+
+More documentation in /docs.
 
 Help flags `-h`/`--help` support is available.
