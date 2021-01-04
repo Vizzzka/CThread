@@ -73,6 +73,55 @@ CThread* my_thread = new CThread(new MyRunnable());
 my_thread->Start();
 my_thread->Join();
 ```
+The CEventClass has following methods:
+
+Set method signal thread that event occured:
+```c++
+void Set();
+```
+
+Thread waits until event state is set to signaled.
+```c++
+bool Wait();
+```
+
+Reset event signaled to unsignaled. 
+```c++
+void Reset();
+```
+
+
+Example of use:
+
+```c++
+class MyConsumer : public IRunnable {
+	virtual void run() {
+		event.Wait();     // wait for an event to occur
+		// perform some task
+		std::cout << "Consumer get number: " << number << "\n";
+		event.Reset();    // reset the event to un-signaled
+	}
+
+};
+
+class MyProducer : public IRunnable {
+	virtual void run() {
+		std::cout << "Producing data...\n";
+		Sleep(1000);
+		number = 10;
+		event.Set();
+	}
+};
+
+int main() {
+	CThread* cons = new CThread(new  MyConsumer());
+	CThread* prod = new CThread(new MyProducer());
+	cons->Start();
+	prod->Start();
+	cos->Join();
+	prod->Join();
+}
+```
 
 More documentation in /docs.
 
