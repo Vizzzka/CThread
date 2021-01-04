@@ -122,6 +122,22 @@ int main() {
 	prod->Join();
 }
 ```
+CExecutor class has following methods:
+
+Constructor creates a pool of pointed size
+```c++
+CExecutor(int size);
+```
+Execute submit runnable object to the pool
+```c++
+void execute(IRunnable *ptr);
+```
+Example of use:
+```c++
+CExecutor pool(5);
+pool.execute(new CThread(new MyRunnable()));
+pool.execute(new new CThread(new MyRunnable());
+```
 
 More documentation in /docs.
 
