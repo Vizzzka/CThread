@@ -2,7 +2,7 @@
 
 ## Team
 
- - [Usachova Victoria](https://github.com/chernetskyi)
+ - [Usachova Victoria](https://github.com/Vizzzka)
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ Dependencies (such as development libraries) can be found in the [dependencies f
 
 1. Clone the project.
     ```bash
-    git clone git@github.com:chernetskyi/cpp-template.git
+    git clone https://github.com/Vizzzka/CThread.git
     ```
 2. Install required packages.
 
